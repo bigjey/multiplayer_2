@@ -50,7 +50,7 @@ const gameLoop = setInterval(function () {
   io.emit("snapshot", snapshot);
 }, 1000 / SERVER_TICK_RATE);
 
-const PORT = process.env.port || 3000;
+const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () => {
   console.log(`game server is running at http://localhost:${PORT}`);
 });
