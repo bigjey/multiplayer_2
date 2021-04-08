@@ -99,7 +99,7 @@ const render = () => {
     let position: IVector2;
     const prevBullet = clientState.prevState?.bullets[bulletId];
     const bullet = clientState.bullets[bulletId];
-    if (prevBullet) {
+    if (bullet.owner !== socket.id && prevBullet) {
       position = Vector2.lerp(prevBullet.position, bullet.position, t);
       // position = bullet.position;
     } else {

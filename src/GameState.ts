@@ -102,7 +102,7 @@ export class GameState {
     const now = Date.now();
 
     Object.values(this.bullets).forEach((bullet) => {
-      if (!server && bullet.owner === socket.id) {
+      if (!server) {
         const moveBy = deltaTime * BULLET_MOVE_SPEED;
         bullet.position.x += moveBy * bullet.direction.x;
         bullet.position.y += moveBy * bullet.direction.y;
