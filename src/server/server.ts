@@ -1,8 +1,17 @@
 import { CommandPayload, ICommand } from "..";
 import { SERVER_TICK_RATE } from "../constants";
 import { GameState } from "../GameState";
+import express from "express";
+import path from "path";
 
-const app = require("express")();
+const app = express();
+
+app.use(express.static(path.resolve(__dirname, "../client/")));
+
+app.use("*", (req, res) => {
+  res.sendFile(path.resolve(__dirname, "../client/index.html"));
+});
+
 const httpServer = require("http").createServer(app);
 const options = {
   cors: {
