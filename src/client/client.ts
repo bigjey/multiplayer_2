@@ -11,7 +11,7 @@ import {
   GAME_H,
   GAME_W,
   PLAYER_MOVE_SPEED,
-  SERVER_TICK_RATE,
+  SERVER_STATE_UPDATE_RATE,
 } from "../constants";
 import { GameState } from "../GameState";
 import { socket } from "./socket";
@@ -43,6 +43,8 @@ const tick = () => {
 
     handleInput(deltaTime);
 
+    clientState.update(deltaTime, false);
+
     render();
   }
 
@@ -57,7 +59,7 @@ const render = () => {
 
   ctx.translate(GAME_W / 2, GAME_H / 2);
 
-  const serverInterval = 1000 / SERVER_TICK_RATE;
+  const serverInterval = 1000 / SERVER_STATE_UPDATE_RATE;
   const now = Date.now();
   const t = Math.min((now - clientState.lastServerUpdate) / serverInterval, 1);
 
@@ -71,6 +73,7 @@ const render = () => {
       const prevPlayer = clientState.prevState?.players[socketId];
       if (prevPlayer) {
         position = Vector2.lerp(prevPlayer.position, player.position, t);
+        // position = player.position;
       } else {
         position = player.position;
       }
@@ -98,6 +101,7 @@ const render = () => {
     const bullet = clientState.bullets[bulletId];
     if (prevBullet) {
       position = Vector2.lerp(prevBullet.position, bullet.position, t);
+      // position = bullet.position;
     } else {
       position = bullet.position;
     }
@@ -117,6 +121,7 @@ const render = () => {
     const enemy = clientState.enemies[enemyId];
     if (prevEnemy) {
       position = Vector2.lerp(prevEnemy.position, enemy.position, t);
+      // position = enemy.position;
     } else {
       position = enemy.position;
     }
@@ -153,6 +158,7 @@ const handleInput = (deltaTime: number) => {
   if (dx || dy) {
     const command: ICommand<IMoveCommandPayload> = {
       id: ++inputId,
+      time: Date.now(),
       type: CommandType.Move,
       payload: {
         velocity: { x: dx, y: dy },
@@ -181,6 +187,7 @@ canvas.addEventListener("click", (e) => {
 
   const command: ICommand<IShootCommandPayload> = {
     id: ++inputId,
+    time: Date.now(),
     type: CommandType.Shoot,
     payload: {
       id: randomId(),
@@ -190,9 +197,10 @@ canvas.addEventListener("click", (e) => {
   };
 
   // clientState.addBullet(socket.id, command);
-
   clientState.applyCommand(socket.id, command);
   socket.emit("command", command);
+
+  // console.log(clientState.bullets);
 });
 
 socket.on("connected", (snapshot) => {

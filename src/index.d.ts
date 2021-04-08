@@ -3,12 +3,14 @@ import { CommandType } from "./constants";
 export interface IGameState {
   players: Record<string, IPlayerState>;
   bullets: Record<string, IBulletState>;
+  deletedBullets: string[];
   enemies: Record<string, IEnemyState>;
   lastProcessedCommand: Record<string, number>;
 }
 
 export interface ICommand<T> {
   id: number;
+  time: number;
   type: CommandType;
   payload: T;
 }

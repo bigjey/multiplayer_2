@@ -1,5 +1,10 @@
 import { CommandPayload, ICommand } from "..";
-import { CommandType, SERVER_LAG, SERVER_TICK_RATE } from "../constants";
+import {
+  CommandType,
+  SERVER_LAG,
+  SERVER_LOGIC_TICK_RATE,
+  SERVER_STATE_UPDATE_RATE,
+} from "../constants";
 import { GameState } from "../GameState";
 import express from "express";
 import path from "path";
@@ -55,10 +60,17 @@ const gameLoop = setInterval(function () {
 
   serverState.update(deltaTime, true);
 
-  const snapshot = serverState.snapshot();
+  // console.log("update game state");
+}, 1000 / SERVER_LOGIC_TICK_RATE);
 
+const updateClientState = setInterval(function () {
+  const snapshot = serverState.snapshot();
   io.emit("snapshot", snapshot);
-}, 1000 / SERVER_TICK_RATE);
+
+  serverState.deletedBullets = [];
+
+  // console.log("send game state to clients");
+}, 1000 / SERVER_STATE_UPDATE_RATE);
 
 const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () => {

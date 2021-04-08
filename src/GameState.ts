@@ -13,7 +13,7 @@ import { socket } from "./client/socket";
 import {
   CommandType,
   BULLET_MOVE_SPEED,
-  SERVER_TICK_RATE,
+  SERVER_STATE_UPDATE_RATE,
   GAME_W,
   GAME_H,
   ENEMY_SPAWN_COOLDOWN,
@@ -26,6 +26,7 @@ import Vector2 from "./Vector2";
 export class GameState {
   players: Record<string, Player> = {};
   bullets: Record<string, Bullet> = {};
+  deletedBullets: string[];
   enemies: Record<string, Enemy> = {};
   commands: Record<string, ICommand<CommandPayload>[]> = {};
   lastProcessedCommand: Record<string, number> = {};
@@ -38,6 +39,7 @@ export class GameState {
 
   onServerState(serverState: IGameState) {
     this.prevState = this.snapshot();
+    // console.log("prev state", this.prevState, "new state", serverState);
 
     this.lastServerUpdate = Date.now();
 
@@ -56,7 +58,6 @@ export class GameState {
           this.commands[socketId] = this.commands[socketId].filter(
             (command) => command.id > serverState.lastProcessedCommand[socketId]
           );
-
           this.commands[socketId].forEach((command) => {
             this.applyCommand(socketId, command);
           });
@@ -70,12 +71,24 @@ export class GameState {
       }
     }
 
-    this.bullets = {};
+    // this.bullets = {};
 
     for (const bulletId in serverState.bullets) {
-      this.bullets[bulletId] = Bullet.fromSnapshot(
-        serverState.bullets[bulletId]
-      );
+      const prevBullet = this.prevState.bullets[bulletId];
+      // console.log("bullet from server", serverState.bullets[bulletId]);
+      // console.log("bullet existed", prevBullet);
+      if (prevBullet && prevBullet.owner === socket.id) {
+        this.bullets[bulletId] = Bullet.fromSnapshot(prevBullet);
+      } else {
+        this.bullets[bulletId] = Bullet.fromSnapshot(
+          serverState.bullets[bulletId]
+        );
+      }
+    }
+
+    for (const bulletId of serverState.deletedBullets) {
+      console.log("deletedBullet", bulletId);
+      delete this.bullets[bulletId];
     }
 
     this.enemies = {};
@@ -87,10 +100,19 @@ export class GameState {
 
   update(deltaTime: number, server: boolean): void {
     const now = Date.now();
+
     Object.values(this.bullets).forEach((bullet) => {
+      if (!server && bullet.owner === socket.id) {
+        const moveBy = deltaTime * BULLET_MOVE_SPEED;
+        bullet.position.x += moveBy * bullet.direction.x;
+        bullet.position.y += moveBy * bullet.direction.y;
+      }
+
       if (server) {
-        bullet.position.x += deltaTime * BULLET_MOVE_SPEED * bullet.direction.x;
-        bullet.position.y += deltaTime * BULLET_MOVE_SPEED * bullet.direction.y;
+        const moveBy = deltaTime * BULLET_MOVE_SPEED;
+        bullet.position.x += moveBy * bullet.direction.x;
+        bullet.position.y += moveBy * bullet.direction.y;
+
         if (
           bullet.position.x < -GAME_W / 2 ||
           bullet.position.x > GAME_W / 2 ||
@@ -101,7 +123,7 @@ export class GameState {
         }
 
         Object.values(this.enemies).forEach((enemy) => {
-          if (AABBIntersects(enemy, bullet)) {
+          if (!bullet.destroy && AABBIntersects(enemy, bullet)) {
             bullet.destroy = true;
             enemy.destroy = true;
             const p = this.players[bullet.owner];
@@ -117,7 +139,6 @@ export class GameState {
       if (server) {
         enemy.position.x += deltaTime * ENEMY_MOVE_SPEED * enemy.direction.x;
         enemy.position.y += deltaTime * ENEMY_MOVE_SPEED * enemy.direction.y;
-
         if (enemy.position.x < -GAME_W / 2) {
           enemy.direction.x *= -1;
           enemy.position.x = -GAME_W / 2;
@@ -125,7 +146,6 @@ export class GameState {
           enemy.direction.x *= -1;
           enemy.position.x = GAME_W / 2;
         }
-
         if (enemy.position.y < -GAME_H / 2) {
           enemy.direction.y *= -1;
           enemy.position.y = -GAME_H / 2;
@@ -139,6 +159,7 @@ export class GameState {
     Object.keys(this.bullets).forEach((bulletId) => {
       if (server) {
         if (this.bullets[bulletId].destroy) {
+          this.deletedBullets.push(bulletId);
           delete this.bullets[bulletId];
         }
       }
@@ -152,22 +173,24 @@ export class GameState {
       }
     });
 
-    // spawn enemy
-    if (
-      server &&
-      Object.keys(this.enemies).length < 50 &&
-      (!this.lastEnemySpawn || now - this.lastEnemySpawn > ENEMY_SPAWN_COOLDOWN)
-    ) {
-      const enemy = new Enemy(
-        randomId(),
-        new Vector2(
-          randomInt(-GAME_W / 2, GAME_W / 2),
-          randomInt(-GAME_H / 2, GAME_H / 2)
-        ),
-        new Vector2(random(-1, 1), random(-1, 1)).normalize()
-      );
-      this.enemies[enemy.id] = enemy;
-      this.lastEnemySpawn = now;
+    if (server) {
+      // spawn enemy
+      if (
+        Object.keys(this.enemies).length < 10 &&
+        (!this.lastEnemySpawn ||
+          now - this.lastEnemySpawn > ENEMY_SPAWN_COOLDOWN)
+      ) {
+        const enemy = new Enemy(
+          randomId(),
+          new Vector2(
+            randomInt(-GAME_W / 2, GAME_W / 2),
+            randomInt(-GAME_H / 2, GAME_H / 2)
+          ),
+          new Vector2(random(-1, 1), random(-1, 1)).normalize()
+        );
+        this.enemies[enemy.id] = enemy;
+        this.lastEnemySpawn = now;
+      }
     }
   }
 
@@ -177,6 +200,7 @@ export class GameState {
       bullets: this.bullets,
       enemies: this.enemies,
       lastProcessedCommand: this.lastProcessedCommand,
+      deletedBullets: this.deletedBullets,
     };
   }
 
@@ -264,22 +288,16 @@ export class Body {
     this.size.y = h;
   }
   get t(): number {
-    return this.position.y;
+    return this.position.y - this.size.y / 2;
   }
   get l(): number {
-    return this.position.x;
+    return this.position.x - this.size.x / 2;
   }
   get b(): number {
-    return this.position.y + this.size.y;
+    return this.position.y + this.size.y / 2;
   }
   get r(): number {
-    return this.position.x + this.size.x;
-  }
-  get center(): IVector2 {
-    return {
-      x: this.position.x + this.size.x / 2,
-      y: this.position.y + this.size.y / 2,
-    };
+    return this.position.x + this.size.x / 2;
   }
 }
 
@@ -347,7 +365,7 @@ class Enemy extends Body implements IEnemyState {
   destroy: boolean = false;
 
   constructor(id: string, position: Vector2, direction: Vector2) {
-    super(position.x, position.y, 16, 16);
+    super(position.x, position.y, 40, 40);
 
     this.id = id;
     this.position = position;
