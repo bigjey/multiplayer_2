@@ -1,0 +1,23 @@
+{
+  "name": "multiplayer_2",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.17.1",
+    "socket.io": "^4.0.1",
+    "socket.io-client": "^4.0.1"
+  },
+  "scripts": {
+    "dev:client": "parcel src/client/index.html",
+    "dev:server": "nodemon --exec ts-node src/server/server.ts",
+    "build:server": "parcel build ./src/server/server.ts -d build/server --target=node",
+    "build:client": "parcel build ./src/client/index.html --public-url=\"./\" -d build/client",
+    "build": "yarn build:server && yarn build:client"
+  },
+  "devDependencies": {
+    "parcel-bundler": "^1.12.5",
+    "ts-node": "^9.1.1",
+    "typescript": "^4.2.3"
+  }
+}
