@@ -4,6 +4,7 @@ export interface IGameState {
   players: Record<string, IPlayerState>;
   bullets: Record<string, IBulletState>;
   enemies: Record<string, IEnemyState>;
+  lastProcessedCommand: Record<string, number>;
 }
 
 export interface ICommand<T> {

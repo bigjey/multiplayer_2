@@ -49,23 +49,17 @@ export class GameState {
       if (socket.id === socketId) {
         const clientPlayer = this.prevState.players[socketId];
 
-        if (
-          clientPlayer &&
-          Vector2.distance(clientPlayer.position, serverPlayer.position) > 20
-        ) {
-          this.players[socketId] = Player.fromSnapshot(serverPlayer);
-          this.players[socketId].score = serverPlayer.score;
+        this.players[socketId] = Player.fromSnapshot(serverPlayer);
+        this.players[socketId].score = serverPlayer.score;
 
-          if (this.commands[socketId]) {
-            this.commands[socketId] = this.commands[socketId].filter(
-              (command) => command.id > this.lastProcessedCommand[socketId]
-            );
+        if (this.commands[socketId]) {
+          this.commands[socketId] = this.commands[socketId].filter(
+            (command) => command.id > serverState.lastProcessedCommand[socketId]
+          );
 
-            this.commands[socketId].forEach((command) => {
-              this.applyCommand(socketId, command);
-              this.lastProcessedCommand[socketId] = command.id;
-            });
-          }
+          this.commands[socketId].forEach((command) => {
+            this.applyCommand(socketId, command);
+          });
         } else {
           this.players[socketId] = Player.fromSnapshot(clientPlayer);
           this.players[socketId].score = serverPlayer.score;
@@ -93,11 +87,10 @@ export class GameState {
 
   update(deltaTime: number, server: boolean): void {
     const now = Date.now();
-    if (server) {
-      Object.values(this.bullets).forEach((bullet) => {
+    Object.values(this.bullets).forEach((bullet) => {
+      if (server) {
         bullet.position.x += deltaTime * BULLET_MOVE_SPEED * bullet.direction.x;
         bullet.position.y += deltaTime * BULLET_MOVE_SPEED * bullet.direction.y;
-
         if (
           bullet.position.x < -GAME_W / 2 ||
           bullet.position.x > GAME_W / 2 ||
@@ -117,9 +110,11 @@ export class GameState {
             }
           }
         });
-      });
+      }
+    });
 
-      Object.values(this.enemies).forEach((enemy) => {
+    Object.values(this.enemies).forEach((enemy) => {
+      if (server) {
         enemy.position.x += deltaTime * ENEMY_MOVE_SPEED * enemy.direction.x;
         enemy.position.y += deltaTime * ENEMY_MOVE_SPEED * enemy.direction.y;
 
@@ -138,46 +133,41 @@ export class GameState {
           enemy.direction.y *= -1;
           enemy.position.y = GAME_H / 2;
         }
-      });
+      }
+    });
 
-      Object.keys(this.bullets).forEach((bulletId) => {
+    Object.keys(this.bullets).forEach((bulletId) => {
+      if (server) {
         if (this.bullets[bulletId].destroy) {
           delete this.bullets[bulletId];
         }
-      });
+      }
+    });
 
-      Object.keys(this.enemies).forEach((enemyId) => {
+    Object.keys(this.enemies).forEach((enemyId) => {
+      if (server) {
         if (this.enemies[enemyId].destroy) {
           delete this.enemies[enemyId];
         }
-      });
-
-      // spawn enemy
-      if (
-        Object.keys(this.enemies).length < 50 &&
-        (!this.lastEnemySpawn ||
-          now - this.lastEnemySpawn > ENEMY_SPAWN_COOLDOWN)
-      ) {
-        const enemy = new Enemy(
-          randomId(),
-          new Vector2(
-            randomInt(-GAME_W / 2, GAME_W / 2),
-            randomInt(-GAME_H / 2, GAME_H / 2)
-          ),
-          new Vector2(random(-1, 1), random(-1, 1)).normalize()
-        );
-        this.enemies[enemy.id] = enemy;
-        this.lastEnemySpawn = now;
       }
-    }
-  }
+    });
 
-  processAllCommands(): void {
-    for (const socketId in this.commands) {
-      this.commands[socketId].forEach((command) => {
-        this.applyCommand(socketId, command);
-      });
-      this.commands[socketId] = [];
+    // spawn enemy
+    if (
+      server &&
+      Object.keys(this.enemies).length < 50 &&
+      (!this.lastEnemySpawn || now - this.lastEnemySpawn > ENEMY_SPAWN_COOLDOWN)
+    ) {
+      const enemy = new Enemy(
+        randomId(),
+        new Vector2(
+          randomInt(-GAME_W / 2, GAME_W / 2),
+          randomInt(-GAME_H / 2, GAME_H / 2)
+        ),
+        new Vector2(random(-1, 1), random(-1, 1)).normalize()
+      );
+      this.enemies[enemy.id] = enemy;
+      this.lastEnemySpawn = now;
     }
   }
 
@@ -186,6 +176,7 @@ export class GameState {
       players: this.players,
       bullets: this.bullets,
       enemies: this.enemies,
+      lastProcessedCommand: this.lastProcessedCommand,
     };
   }
 
@@ -208,6 +199,19 @@ export class GameState {
     delete this.lastProcessedCommand[socketId];
 
     console.log("removing player", socketId, Object.keys(this.players).length);
+  }
+
+  addBullet(socketId: string, command: ICommand<IShootCommandPayload>) {
+    const { position, direction, id } = command.payload;
+
+    const bullet = new Bullet(
+      id,
+      socketId,
+      new Vector2(position.x, position.y),
+      new Vector2(direction.x, direction.y)
+    );
+
+    this.bullets[bullet.id] = bullet;
   }
 
   addCommand(socketId: string, command: ICommand<CommandPayload>) {

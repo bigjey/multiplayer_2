@@ -1,5 +1,5 @@
 import { CommandPayload, ICommand } from "..";
-import { SERVER_TICK_RATE } from "../constants";
+import { CommandType, SERVER_LAG, SERVER_TICK_RATE } from "../constants";
 import { GameState } from "../GameState";
 import express from "express";
 import path from "path";
@@ -29,7 +29,17 @@ io.on("connection", (socket) => {
   });
 
   socket.on("command", (command: ICommand<CommandPayload>) => {
-    serverState.applyCommand(socket.id, command);
+    setTimeout(
+      () => {
+        serverState.applyCommand(socket.id, command);
+        switch (command.type) {
+          case CommandType.Move: {
+            serverState.lastProcessedCommand[socket.id] = command.id;
+          }
+        }
+      },
+      process.env.NODE_ENV === "production" ? 0 : SERVER_LAG
+    );
   });
 
   socket.on("disconnect", () => {

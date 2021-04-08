@@ -160,6 +160,7 @@ const handleInput = (deltaTime: number) => {
     };
 
     clientState.applyCommand(socket.id, command);
+    clientState.commands[socket.id].push(command);
 
     socket.emit("command", command);
   }
@@ -188,8 +189,9 @@ canvas.addEventListener("click", (e) => {
     },
   };
 
-  clientState.applyCommand(socket.id, command);
+  // clientState.addBullet(socket.id, command);
 
+  clientState.applyCommand(socket.id, command);
   socket.emit("command", command);
 });
 
